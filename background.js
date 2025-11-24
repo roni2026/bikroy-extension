@@ -32,7 +32,7 @@ chrome.runtime.onInstalled.addListener(() => {
     chrome.alarms.create('reviewCountRefresh', { delayInMinutes: 1, periodInMinutes: 1 });
 });
 
-// Listener for Internal Popup Messages
+// A. INTERNAL MESSAGES (Extension Popup)
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'startTracking') {
         startTracking();
@@ -53,6 +53,42 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         updatePermissionsForAgent(request.agentName, request.permissions)
             .then(() => sendResponse({ status: 'success' }))
             .catch(error => sendResponse({ status: 'error', error: 'Update failed' }));
+    }
+    return true; 
+});
+
+// B. EXTERNAL MESSAGES (Web Dashboard) - NEW CODE ADDED HERE
+chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
+    // 1. Handshake (Connection Check)
+    if (request.action === 'handshake') {
+        sendResponse({ status: 'connected', version: '1.4' });
+    } 
+    // 2. Data Fetch (Dashboard polling)
+    else if (request.action === 'getData') {
+        chrome.storage.local.get(['agentData', 'reviewCounts', 'isRunning', 'selectedAgents', 'sessionLogs'], (result) => {
+            sendResponse(result || {});
+        });
+    } 
+    // 3. Commands (Start/Stop/Refresh from Dashboard)
+    else if (request.action === 'command') {
+        if (request.command === 'start') {
+            chrome.storage.local.set({ selectedAgents: request.payload, isRunning: true }, () => {
+                startTracking();
+                sendResponse({ status: 'started' });
+            });
+        } else if (request.command === 'stop') {
+            stopTracking();
+            sendResponse({ status: 'stopped' });
+        } else if (request.command === 'refresh') {
+            updateReviewCounts();
+            updateAllAgentData();
+            sendResponse({ status: 'refreshing' });
+        } else if (request.command === 'clearLogs') {
+            chrome.storage.local.set({ sessionLogs: [] }, () => {
+                syncToFirebase();
+                sendResponse({ status: 'cleared' });
+            });
+        }
     }
     return true; 
 });
@@ -263,13 +299,12 @@ async function checkInactivity() {
         const diff = now - lastActive;
         const minsInactive = Math.floor(diff / 60000);
         
-        // Log at 15m, 30m, 60m thresholds (avoid spamming every 5m)
-        // We use lastLogTime to ensure we don't log the same "15m" alert twice
+        // Log at 15m, 30m, 60m thresholds
         if (minsInactive >= 15) {
             const lastLog = agent.lastLogTime || 0;
             const timeSinceLastLog = now - lastLog;
             
-            // Log if we haven't logged for this agent in 14 minutes (approx 15m intervals)
+            // Log if we haven't logged for this agent in 14 minutes
             if (timeSinceLastLog > 14 * 60 * 1000) {
                 const date = new Date();
                 const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -284,7 +319,6 @@ async function checkInactivity() {
                 agent.lastLogTime = now;
                 logsUpdated = true;
 
-                // Send Chrome Notification
                 chrome.notifications.create({
                     type: 'basic',
                     iconUrl: 'images/icon128.png',
@@ -297,9 +331,7 @@ async function checkInactivity() {
     }
 
     if (logsUpdated) {
-        // Keep log size manageable (last 50 entries)
         if (currentLogs.length > 50) currentLogs.length = 50;
-        
         await chrome.storage.local.set({ agentData, sessionLogs: currentLogs });
         syncToFirebase();
     }
@@ -312,7 +344,6 @@ async function resetHourlyCounts() {
         const date = new Date();
         const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         
-        // Add Hourly Summary Log
         currentLogs.unshift({
             type: 'info',
             time: timeString,
@@ -445,4 +476,3 @@ async function updatePermissionsForAgent(name, newPermissions) {
         throw error;
     }
 }
-
