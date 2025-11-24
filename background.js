@@ -70,6 +70,7 @@ chrome.runtime.onInstalled.addListener(() => {
     chrome.alarms.create('reviewCountRefresh', { delayInMinutes: 1, periodInMinutes: 1 });
 });
 
+// Listener for Internal Popup Messages
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'startTracking') {
         startTracking();
@@ -96,6 +97,45 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             .catch(error => sendResponse({ status: 'error', error: message }));
     }
     return true; // Indicates async response
+});
+
+// --- NEW LISTENER: Listener for External Web Dashboard Messages ---
+chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
+    // 1. Handle Handshake
+    if (request.action === 'handshake') {
+        sendResponse({ status: 'connected', version: '1.2' });
+        return true; 
+    }
+
+    // 2. Handle Data Fetching
+    if (request.action === 'getData') {
+        chrome.storage.local.get(['agentData', 'reviewCounts', 'isRunning', 'selectedAgents'], (result) => {
+            sendResponse(result);
+        });
+        return true; 
+    }
+
+    // 3. Handle Commands (Start/Stop/Refresh)
+    if (request.action === 'command') {
+        if (request.command === 'start') {
+            // Dashboard sends payload of agents to track
+            const agentsToTrack = request.payload || [];
+            chrome.storage.local.set({ selectedAgents: agentsToTrack, isRunning: true }, () => {
+                startTracking(); 
+                sendResponse({ success: true });
+            });
+        } 
+        else if (request.command === 'stop') {
+            stopTracking();
+            sendResponse({ success: true });
+        } 
+        else if (request.command === 'refresh') {
+            updateReviewCounts();
+            updateAllAgentData();
+            sendResponse({ success: true });
+        }
+        return true;
+    }
 });
 
 // Alarm listener handles both queue and agent alarms
@@ -148,7 +188,7 @@ function startTracking() {
             updateAllAgentData(true); // Initial fetch for agents
             
             // --- Set up agent-specific alarms ---
-            chrome.alarms.create('adRefresh', { delayInMinutes: 1, periodInMinutes: 15 }); // UPDATED to 15 minutes
+            chrome.alarms.create('adRefresh', { delayInMinutes: 1, periodInMinutes: 15 });
             const now = new Date();
             const minutesToNextHour = 60 - now.getMinutes();
             chrome.alarms.create('hourlyReset', { delayInMinutes: minutesToNextHour, periodInMinutes: 60 });
