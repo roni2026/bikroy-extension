@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Bikroy Ad Tracker",
-  "version": "1.1",
+  "version": "1.2",
   "description": "Tracks ad posting activity of agents on admin.bikroy.com and monitors review queues.",
   "permissions": [
     "storage",
@@ -31,11 +31,20 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://admin.bikroy.com/search/item*"],
-      "js": ["content.js"]
+      "matches": [
+        "https://admin.bikroy.com/search/item*"
+      ],
+      "js": [
+        "content.js"
+      ]
     }
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com;"
+  },
+  "externally_connectable": {
+    "matches": [
+      "https://bikroyinventory.onrender.com/*"
+    ]
   }
 }
