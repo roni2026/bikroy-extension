@@ -62,11 +62,9 @@ const agents = {
     }
 };
 
-// On extension install/update, initialize notification timestamps and set alarms
 chrome.runtime.onInstalled.addListener(() => {
     console.log("Extension installed/updated.");
-    chrome.storage.local.set({ notificationTimestamps: {} });
-    // Create an alarm to refresh review queues every 1 minute.
+    chrome.storage.local.set({ notificationTimestamps: {}, sessionLogs: [] });
     chrome.alarms.create('reviewCountRefresh', { delayInMinutes: 1, periodInMinutes: 1 });
 });
 
@@ -96,29 +94,23 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             .then(() => sendResponse({ status: 'success' }))
             .catch(error => sendResponse({ status: 'error', error: message }));
     }
-    return true; // Indicates async response
+    return true; 
 });
 
-// --- NEW LISTENER: Listener for External Web Dashboard Messages ---
+// Listener for External Web Dashboard Messages
 chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
-    // 1. Handle Handshake
     if (request.action === 'handshake') {
         sendResponse({ status: 'connected', version: '1.2' });
         return true; 
     }
-
-    // 2. Handle Data Fetching
     if (request.action === 'getData') {
-        chrome.storage.local.get(['agentData', 'reviewCounts', 'isRunning', 'selectedAgents'], (result) => {
+        chrome.storage.local.get(['agentData', 'reviewCounts', 'isRunning', 'selectedAgents', 'sessionLogs'], (result) => {
             sendResponse(result);
         });
         return true; 
     }
-
-    // 3. Handle Commands (Start/Stop/Refresh)
     if (request.action === 'command') {
         if (request.command === 'start') {
-            // Dashboard sends payload of agents to track
             const agentsToTrack = request.payload || [];
             chrome.storage.local.set({ selectedAgents: agentsToTrack, isRunning: true }, () => {
                 startTracking(); 
@@ -134,49 +126,41 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
             updateAllAgentData();
             sendResponse({ success: true });
         }
+        else if (request.command === 'clearLogs') {
+             chrome.storage.local.set({ sessionLogs: [] });
+             sendResponse({ success: true });
+        }
         return true;
     }
 });
 
-// Alarm listener handles both queue and agent alarms
 chrome.alarms.onAlarm.addListener((alarm) => {
-    // Handle queue refresh alarm independently of agent tracking
     if (alarm.name === 'reviewCountRefresh') {
-        console.log('ALARM: 1 minute review queue refresh triggered.');
         updateReviewCounts();
         return;
     }
 
-    // For agent-related alarms, check if tracking is active
     chrome.storage.local.get('isRunning', (result) => {
         if (!result.isRunning) return;
 
         if (alarm.name === 'adRefresh') {
-            console.log('ALARM: 15 minute agent data refresh triggered.');
             updateAllAgentData();
         } else if (alarm.name === 'hourlyReset') {
-            console.log('ALARM: Hourly count reset triggered.');
             resetHourlyCounts();
         } else if (alarm.name === 'inactivityCheck') {
-             console.log('ALARM: Inactivity Check.');
              checkInactivity();
         }
     });
 });
 
-
 function stopTracking() {
-    // Clear only agent-related alarms
     chrome.alarms.clear('adRefresh');
     chrome.alarms.clear('hourlyReset');
     chrome.alarms.clear('inactivityCheck');
-    // Set agent data to empty and tracking to false
-    chrome.storage.local.set({ isRunning: false, agentData: {} });
-    console.log('Agent tracking stopped. Agent data and alarms cleared.');
+    chrome.storage.local.set({ isRunning: false, agentData: {} }); // Logs are preserved until manually cleared
 }
 
 function startTracking() {
-    console.log('Starting agent tracking process...');
     chrome.storage.local.get('selectedAgents', (result) => {
         if (!result.selectedAgents || result.selectedAgents.length === 0) {
             chrome.storage.local.set({ isRunning: false });
@@ -193,16 +177,16 @@ function startTracking() {
                 lastHourAds: 0, 
                 cumulativeNewAds: 0, 
                 permissions: '...',
-                lastActiveTime: now // Initialize last active time to NOW
+                lastActiveTime: now 
             };
         });
 
-        chrome.storage.local.set({ agentData: initialData, isRunning: true }, () => {
-            updateAllAgentData(true); // Initial fetch for agents
+        chrome.storage.local.set({ agentData: initialData, isRunning: true, sessionLogs: [] }, () => {
+            updateAllAgentData(true);
             
-            // --- Set up agent-specific alarms ---
             chrome.alarms.create('adRefresh', { delayInMinutes: 1, periodInMinutes: 15 });
-            chrome.alarms.create('inactivityCheck', { delayInMinutes: 15, periodInMinutes: 15 }); // Check every 15 mins
+            chrome.alarms.create('inactivityCheck', { delayInMinutes: 5, periodInMinutes: 5 }); // Check every 5 mins
+            
             const nowTime = new Date();
             const minutesToNextHour = 60 - nowTime.getMinutes();
             chrome.alarms.create('hourlyReset', { delayInMinutes: minutesToNextHour, periodInMinutes: 60 });
@@ -211,8 +195,6 @@ function startTracking() {
 }
 
 function resetStats() {
-    console.log('Resetting agent statistics...');
-    // Clear and then restart agent tracking
     chrome.alarms.clear('adRefresh');
     chrome.alarms.clear('hourlyReset');
     chrome.alarms.clear('inactivityCheck');
@@ -222,7 +204,6 @@ function resetStats() {
 }
 
 async function updateReviewCounts() {
-    console.log("Fetching review queue counts...");
     let reviewTab;
     try {
         reviewTab = await chrome.tabs.create({ url: "https://admin.bikroy.com/review/email", active: false });
@@ -243,74 +224,48 @@ async function updateReviewCounts() {
         });
 
         const counts = injectionResults[0].result;
-        if (!counts || Object.keys(counts).length === 0) {
-            throw new Error("No review count elements found.");
-        }
-        
-        await chrome.storage.local.set({ reviewCounts: counts });
-        console.log("Review counts updated:", counts);
+        if (counts) await chrome.storage.local.set({ reviewCounts: counts });
 
-        // --- Notification Logic for High Queues ---
+        // Notification Logic for High Queues
         const { notificationTimestamps: storedTimestamps } = await chrome.storage.local.get({ notificationTimestamps: {} });
         const newTimestamps = { ...storedTimestamps };
         let notificationSent = false;
 
-        const notificationThresholds = {
-            'member': 25,
-            'listing_fee': 30,
-            'general': 300,
-        };
-        const snoozeDurations = { // in milliseconds
-            'member': 15 * 60 * 1000,
-            'listing_fee': 15 * 60 * 1000,
-            'general': 30 * 60 * 1000,
-        };
+        const notificationThresholds = { 'member': 25, 'listing_fee': 30, 'general': 300 };
+        const snoozeDurations = { 'member': 900000, 'listing_fee': 900000, 'general': 1800000 };
 
         const triggeredQueues = [];
         for (const queue in notificationThresholds) {
-            const threshold = notificationThresholds[queue];
-            const snooze = snoozeDurations[queue];
-            const lastNotified = newTimestamps[queue] || 0;
             const count = counts[queue] || 0;
-
-            if (count >= threshold && (Date.now() - lastNotified > snooze)) {
-                triggeredQueues.push(queue.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()));
+            if (count >= notificationThresholds[queue] && (Date.now() - (newTimestamps[queue] || 0) > snoozeDurations[queue])) {
+                triggeredQueues.push(queue);
                 newTimestamps[queue] = Date.now();
                 notificationSent = true;
             }
         }
         
         if (triggeredQueues.length > 0) {
-            const notificationMessage = `High volume in: ${triggeredQueues.join(', ')}. Needs to be cleared.`;
             chrome.notifications.create({
                 type: 'basic',
                 iconUrl: 'images/icon128.png',
                 title: 'Review Queue Alert',
-                message: notificationMessage,
+                message: `High volume in: ${triggeredQueues.join(', ')}`,
                 priority: 2
             });
         }
         
-        if (notificationSent) {
-            await chrome.storage.local.set({ notificationTimestamps: newTimestamps });
-        }
+        if (notificationSent) await chrome.storage.local.set({ notificationTimestamps: newTimestamps });
 
     } catch (error) {
         console.error("Error fetching review counts:", error);
-        await chrome.storage.local.set({ reviewCounts: {} });
     } finally {
         if (reviewTab) await chrome.tabs.remove(reviewTab.id);
     }
 }
 
-
 async function updateAllAgentData(forceInitial = false) {
     const { selectedAgents, agentData: currentData } = await chrome.storage.local.get(['selectedAgents', 'agentData']);
-
-    if (!selectedAgents || selectedAgents.length === 0) {
-        stopTracking();
-        return;
-    }
+    if (!selectedAgents || selectedAgents.length === 0) { stopTracking(); return; }
 
     const newAgentData = JSON.parse(JSON.stringify(currentData || {}));
     const currentTime = Date.now();
@@ -323,7 +278,7 @@ async function updateAllAgentData(forceInitial = false) {
             const adCountUrl = `https://admin.bikroy.com/search/item?submitted=1&search=&event_type_from=&event_type_to=&event_type=&category=&rejection=&location=&admin_user=${agentId}`;
             
             const response = await fetch(adCountUrl);
-            if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+            if (!response.ok) throw new Error(`HTTP`);
             
             const htmlText = await response.text();
             const match = htmlText.match(/of ([\d,]+) results/);
@@ -332,55 +287,53 @@ async function updateAllAgentData(forceInitial = false) {
             if (totalAds !== null) {
                 const agentStats = newAgentData[name] || {};
                 
-                // FIX: If lastTotal is 0 or missing, treat this as the INITIAL baseline.
-                // This prevents the "This Hour" count from jumping to 160,000 immediately.
                 if (forceInitial || !agentStats.lastTotal || agentStats.lastTotal === 0) {
+                    // Baseline set
                     agentStats.lastTotal = totalAds;
-                    agentStats.thisHourAds = 0; // Reset counters on initial
-                    agentStats.cumulativeNewAds = 0;
-                    agentStats.lastActiveTime = currentTime; // Reset activity timer
+                    agentStats.thisHourAds = 0;
+                    agentStats.cumulativeNewAds = 0; // "Total Tracked" starts at 0
+                    agentStats.lastActiveTime = currentTime;
                 } else {
                     if (totalAds > agentStats.lastTotal) {
                         const newAds = totalAds - agentStats.lastTotal;
                         agentStats.thisHourAds = (agentStats.thisHourAds || 0) + newAds;
                         agentStats.cumulativeNewAds = (agentStats.cumulativeNewAds || 0) + newAds;
-                        agentStats.lastActiveTime = currentTime; // Update activity timestamp
+                        agentStats.lastActiveTime = currentTime; 
                     }
                 }
                 
-                agentStats.totalAds = totalAds; // Keep track of raw total for debug
-                agentStats.lastTotal = totalAds; // Update baseline for next compare
+                agentStats.totalAds = totalAds; 
+                agentStats.lastTotal = totalAds; 
                 newAgentData[name] = agentStats;
             }
-        } catch (error) {
-            console.error(`Error fetching ad count for ${name}:`, error);
-        }
+        } catch (error) { console.error(error); }
 
         const permissions = await fetchPermissionsForAgent(name);
-        if (newAgentData[name]) {
-            newAgentData[name].permissions = permissions;
-        }
+        if (newAgentData[name]) newAgentData[name].permissions = permissions;
     }
     
     await chrome.storage.local.set({ agentData: newAgentData });
 }
 
-// --- Check Inactivity Function ---
+// --- Check Inactivity Function (Updated for 15, 20, 25... mins) ---
 async function checkInactivity() {
     const { agentData, isRunning } = await chrome.storage.local.get(['agentData', 'isRunning']);
     if (!isRunning || !agentData) return;
 
-    const INACTIVITY_LIMIT = 15 * 60 * 1000; // 15 Minutes in MS
+    const MIN_15 = 15 * 60 * 1000;
     const now = Date.now();
     const inactiveAgents = [];
 
     for (const name in agentData) {
         const agent = agentData[name];
-        // If lastActiveTime is missing, default to now (to be safe)
         const lastActive = agent.lastActiveTime || now;
+        const diff = now - lastActive;
         
-        if (now - lastActive > INACTIVITY_LIMIT) {
-            inactiveAgents.push(name);
+        // Triggers if diff is >= 15 mins. Since alarm runs every 5 mins, 
+        // this will trigger at ~15, ~20, ~25, etc.
+        if (diff >= MIN_15) {
+            const minutesInactive = Math.floor(diff / 60000);
+            inactiveAgents.push(`${name} (${minutesInactive}m)`);
         }
     }
 
@@ -388,35 +341,48 @@ async function checkInactivity() {
         chrome.notifications.create({
             type: 'basic',
             iconUrl: 'images/icon128.png',
-            title: 'Agent Inactivity Alert',
-            message: `${inactiveAgents.join(', ')} inactive for over 15 mins!`,
+            title: 'Inactivity Alert',
+            message: `Inactive: ${inactiveAgents.join(', ')}`,
             priority: 2
         });
     }
 }
 
-function getPermissionsFromPage() {
-    const checked = Array.from(document.querySelectorAll('.permissions .ui-checkbox:checked'));
-    return checked.map(checkbox => checkbox.parentElement.textContent.trim());
-}
+async function resetHourlyCounts() {
+    const { agentData, sessionLogs } = await chrome.storage.local.get(['agentData', 'sessionLogs']);
+    if (agentData) {
+        let hourTotal = 0;
+        let grandTotal = 0;
 
-function applyAndSaveChanges(permissionsToSet) {
-    for (const [permissionValue, shouldBeChecked] of Object.entries(permissionsToSet)) {
-        const checkbox = document.querySelector(`input[value="${permissionValue}"]`);
-        if (checkbox) {
-            if (checkbox.checked !== shouldBeChecked) {
-                checkbox.parentElement.click();
-            }
+        // Calculate totals for the log before resetting
+        for (const name in agentData) {
+            hourTotal += (agentData[name].thisHourAds || 0);
+            grandTotal += (agentData[name].cumulativeNewAds || 0);
         }
-    }
-    const saveButton = document.querySelector('button.ui-btn.is-primary');
-    if (saveButton) {
-        saveButton.click();
-    } else {
-        throw new Error('Save button not found.');
+
+        // Add to Log
+        const currentLogs = sessionLogs || [];
+        const date = new Date();
+        const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        
+        currentLogs.push({
+            time: timeString,
+            hourTotal: hourTotal,
+            grandTotal: grandTotal
+        });
+
+        // Reset Counts
+        for (const name in agentData) {
+            agentData[name].lastHourAds = agentData[name].thisHourAds || 0;
+            agentData[name].thisHourAds = 0;
+        }
+
+        chrome.storage.local.set({ agentData, sessionLogs: currentLogs });
+        console.log('Hourly counts reset and logged.');
     }
 }
 
+// ... Permission functions ...
 async function fetchPermissionsForAgent(name, rawOutput = false) {
     const agentInfo = agents[name];
     if (!agentInfo.permission_url) return rawOutput ? [] : 'N/A';
@@ -454,34 +420,38 @@ async function fetchPermissionsForAgent(name, rawOutput = false) {
         const checkedPermissions = permResults?.[0]?.result;
         if (!checkedPermissions) return rawOutput ? [] : 'Error';
 
-        if (rawOutput) {
-            return checkedPermissions;
-        }
+        if (rawOutput) return checkedPermissions;
 
-        const permissionMap = { 
-            'Member': 'M', 'Listing fee': 'L', 'General': 'G', 
-            'Edited': 'E', 'Verification': 'V' 
-        };
-        const permissionsString = checkedPermissions
-            .map(p => permissionMap[p])
-            .filter(Boolean)
-            .join(' ');
+        const permissionMap = { 'Member': 'M', 'Listing fee': 'L', 'General': 'G', 'Edited': 'E', 'Verification': 'V' };
+        const permissionsString = checkedPermissions.map(p => permissionMap[p]).filter(Boolean).join(' ');
         
         return permissionsString || 'None';
 
     } catch (error) {
-        console.error(`Error fetching permissions for ${name}:`, error);
-        if (searchTab) await chrome.tabs.remove(searchTab.id).catch(e => console.error("Could not remove searchTab", e));
+        if (searchTab) await chrome.tabs.remove(searchTab.id).catch(e => console.error(e));
         return rawOutput ? [] : 'Perms Error';
     }
 }
 
-async function updatePermissionsForAgent(name, newPermissions) {
-    console.log(`Starting permission update for ${name}`);
-    const agentInfo = agents[name];
-    if (!agentInfo?.permission_url) {
-        throw new Error('Agent not found or has no permission URL.');
+function getPermissionsFromPage() {
+    const checked = Array.from(document.querySelectorAll('.permissions .ui-checkbox:checked'));
+    return checked.map(checkbox => checkbox.parentElement.textContent.trim());
+}
+
+function applyAndSaveChanges(permissionsToSet) {
+    for (const [permissionValue, shouldBeChecked] of Object.entries(permissionsToSet)) {
+        const checkbox = document.querySelector(`input[value="${permissionValue}"]`);
+        if (checkbox && checkbox.checked !== shouldBeChecked) {
+            checkbox.parentElement.click();
+        }
     }
+    const saveButton = document.querySelector('button.ui-btn.is-primary');
+    if (saveButton) saveButton.click();
+}
+
+async function updatePermissionsForAgent(name, newPermissions) {
+    const agentInfo = agents[name];
+    if (!agentInfo?.permission_url) throw new Error('No permission URL.');
 
     let searchTab;
     try {
@@ -498,9 +468,7 @@ async function updatePermissionsForAgent(name, newPermissions) {
             if(searchTab) await chrome.tabs.remove(searchTab.id);
         }
 
-        if (!editLink) {
-            throw new Error('Could not find the user edit link.');
-        }
+        if (!editLink) throw new Error('No edit link.');
 
         const permissionPageUrl = 'https://admin.bikroy.com' + editLink;
         let permTab;
@@ -517,27 +485,13 @@ async function updatePermissionsForAgent(name, newPermissions) {
             if (permTab) await chrome.tabs.remove(permTab.id);
         }
         
-        console.log(`Permissions updated for ${name}. Refreshing data...`);
         const { agentData } = await chrome.storage.local.get('agentData');
         if (agentData?.[name]) {
             agentData[name].permissions = await fetchPermissionsForAgent(name);
             await chrome.storage.local.set({ agentData });
         }
     } catch (error) {
-        console.error("Error updating permissions:", error);
-        if (searchTab) await chrome.tabs.remove(searchTab.id).catch(e => console.error("Could not remove searchTab", e));
+        if (searchTab) await chrome.tabs.remove(searchTab.id).catch(e => console.error(e));
         throw error;
-    }
-}
-
-async function resetHourlyCounts() {
-    const { agentData } = await chrome.storage.local.get('agentData');
-    if (agentData) {
-        for (const name in agentData) {
-            agentData[name].lastHourAds = agentData[name].thisHourAds || 0;
-            agentData[name].thisHourAds = 0;
-        }
-        chrome.storage.local.set({ agentData });
-        console.log('Hourly counts have been reset.');
     }
 }
