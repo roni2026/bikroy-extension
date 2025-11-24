@@ -8,78 +8,31 @@ const db = getDatabase(app);
 
 // --- 2. AGENTS CONFIGURATION ---
 const agents = {
-    "Mehedi": {
-        id: "5300426f-74f8-45fb-8a13-2cf5b3a90e35",
-        permission_url: "https://admin.bikroy.com/admins?search=hasan.myol%40bikroy.com&permission="
-    },
-    "Yeamin": {
-        id: "2ddd587c-53ce-4359-a3c4-9c62e7246913",
-        permission_url: "https://admin.bikroy.com/admins?search=yeamin.myol%40bikroy.com&permission="
-    },
-    "Utsow": {
-        id: "ddc4647e-1ff0-4ab5-86a4-9115c09238d2",
-        permission_url: "https://admin.bikroy.com/admins?search=utsow.myol%40bikroy.com%09&permission="
-    },
-    "Udoy": {
-        id: "b0199965-c48f-41a4-8ef7-bb72fe59ad19",
-        permission_url: "https://admin.bikroy.com/admins?search=udoy.myol%40bikroy.com%09&permission="
-    },
-    "Salahuddin": {
-        id: "bf17fa33-21db-4c3a-94f6-cc9632285a2a",
-        permission_url: "https://admin.bikroy.com/admins?search=salahuddin.myol%40bikroy.com%09&permission="
-    },
-    "Halal": {
-        id: "17410938-7233-45e3-b127-0ab1ce257b11",
-        permission_url: "https://admin.bikroy.com/admins?search=halal.myol%40bikroy.com&permission="
-    },
-    "Jisan": {
-        id: "58f389df-f6be-4f12-96d2-0254fc3640b0",
-        permission_url: "https://admin.bikroy.com/admins?search=jisan.myol%40bikroy.com%09&permission="
-    },
-    "Sarnali": {
-        id: "dbac7bc5-1b6f-4498-9978-5ae7f9cf796c",
-        permission_url: "https://admin.bikroy.com/admins?search=sarnali.myol%40bikroy.com%09&permission="
-    },
-    "Asif": {
-        id: "1dcdbdb7-04a7-47d8-9819-0156938964be",
-        permission_url: "https://admin.bikroy.com/admins?search=asif.myol%40bikroy.com%09&permission="
-    },
-    "Anik": {
-        id: "f3c261a5-fe74-45ec-82d4-7f5218436e4d",
-        permission_url: "https://admin.bikroy.com/admins?search=anik.myol%40bikroy.com%09&permission="
-    },
-    "Riazul": {
-        id: "ca7e9fff-957a-4726-bee8-c9ce235abf11",
-        permission_url: "https://admin.bikroy.com/admins?search=riazul.ihsl%40bikroy.com%09&permission="
-    },
-    "Sonjoy": {
-        id: "724f4be9-3130-470c-8827-f8197322f99e",
-        permission_url: "https://admin.bikroy.com/admins?search=mondol.myol%40bikroy.com%09&permission="
-    },
-    "Roni": {
-        id: "7585f878-a596-43ed-a7e8-ab49ee257e22",
-        permission_url: null 
-    },
-    "Deb": {
-        id: "4c658d2c-efb2-46b5-a4b6-0842df96ca58",
-        permission_url: "https://admin.bikroy.com/admins?search=deb.myol%40bikroy.com&permission="
-    },
-    "Minhazul": {
-        id: "1f1bdb01-367e-49df-9678-ffb3f01d4624",
-        permission_url: "https://admin.bikroy.com/admins?search=minhazul.myol%40bikroy.com&permission="
-    }
+    "Mehedi": { id: "5300426f-74f8-45fb-8a13-2cf5b3a90e35", permission_url: "https://admin.bikroy.com/admins?search=hasan.myol%40bikroy.com&permission=" },
+    "Yeamin": { id: "2ddd587c-53ce-4359-a3c4-9c62e7246913", permission_url: "https://admin.bikroy.com/admins?search=yeamin.myol%40bikroy.com&permission=" },
+    "Utsow": { id: "ddc4647e-1ff0-4ab5-86a4-9115c09238d2", permission_url: "https://admin.bikroy.com/admins?search=utsow.myol%40bikroy.com%09&permission=" },
+    "Udoy": { id: "b0199965-c48f-41a4-8ef7-bb72fe59ad19", permission_url: "https://admin.bikroy.com/admins?search=udoy.myol%40bikroy.com%09&permission=" },
+    "Salahuddin": { id: "bf17fa33-21db-4c3a-94f6-cc9632285a2a", permission_url: "https://admin.bikroy.com/admins?search=salahuddin.myol%40bikroy.com%09&permission=" },
+    "Halal": { id: "17410938-7233-45e3-b127-0ab1ce257b11", permission_url: "https://admin.bikroy.com/admins?search=halal.myol%40bikroy.com&permission=" },
+    "Jisan": { id: "58f389df-f6be-4f12-96d2-0254fc3640b0", permission_url: "https://admin.bikroy.com/admins?search=jisan.myol%40bikroy.com%09&permission=" },
+    "Sarnali": { id: "dbac7bc5-1b6f-4498-9978-5ae7f9cf796c", permission_url: "https://admin.bikroy.com/admins?search=sarnali.myol%40bikroy.com%09&permission=" },
+    "Asif": { id: "1dcdbdb7-04a7-47d8-9819-0156938964be", permission_url: "https://admin.bikroy.com/admins?search=asif.myol%40bikroy.com%09&permission=" },
+    "Anik": { id: "f3c261a5-fe74-45ec-82d4-7f5218436e4d", permission_url: "https://admin.bikroy.com/admins?search=anik.myol%40bikroy.com%09&permission=" },
+    "Riazul": { id: "ca7e9fff-957a-4726-bee8-c9ce235abf11", permission_url: "https://admin.bikroy.com/admins?search=riazul.ihsl%40bikroy.com%09&permission=" },
+    "Sonjoy": { id: "724f4be9-3130-470c-8827-f8197322f99e", permission_url: "https://admin.bikroy.com/admins?search=mondol.myol%40bikroy.com%09&permission=" },
+    "Roni": { id: "7585f878-a596-43ed-a7e8-ab49ee257e22", permission_url: null },
+    "Deb": { id: "4c658d2c-efb2-46b5-a4b6-0842df96ca58", permission_url: "https://admin.bikroy.com/admins?search=deb.myol%40bikroy.com&permission=" },
+    "Minhazul": { id: "1f1bdb01-367e-49df-9678-ffb3f01d4624", permission_url: "https://admin.bikroy.com/admins?search=minhazul.myol%40bikroy.com&permission=" }
 };
 
 // --- 3. EVENT LISTENERS ---
 
-// On Install/Update
 chrome.runtime.onInstalled.addListener(() => {
-    console.log("Extension installed/updated.");
     chrome.storage.local.set({ notificationTimestamps: {}, sessionLogs: [] });
     chrome.alarms.create('reviewCountRefresh', { delayInMinutes: 1, periodInMinutes: 1 });
 });
 
-// Listener for Internal Popup Messages (Extension Popup)
+// Listener for Internal Popup Messages
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'startTracking') {
         startTracking();
@@ -96,10 +49,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     } else if (request.action === 'stopTracking') {
         stopTracking();
         sendResponse({status: 'stopped'});
-    } else if (request.action === 'getLivePermissions') {
-        fetchPermissionsForAgent(request.agentName, true)
-            .then(permissions => sendResponse({ permissions }))
-            .catch(error => sendResponse({ error: error.message }));
     } else if (request.action === 'updatePermissions') {
         updatePermissionsForAgent(request.agentName, request.permissions)
             .then(() => sendResponse({ status: 'success' }))
@@ -108,51 +57,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true; 
 });
 
-// Listener for External Messages (Local Web Dashboard)
-chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
-    if (request.action === 'handshake') {
-        sendResponse({ status: 'connected', version: '1.3' });
-        return true; 
-    }
-    if (request.action === 'getData') {
-        chrome.storage.local.get(['agentData', 'reviewCounts', 'isRunning', 'selectedAgents', 'sessionLogs'], (result) => {
-            sendResponse(result);
-        });
-        return true; 
-    }
-    if (request.action === 'command') {
-        if (request.command === 'start') {
-            const agentsToTrack = request.payload || [];
-            chrome.storage.local.set({ selectedAgents: agentsToTrack, isRunning: true }, () => {
-                startTracking(); 
-                sendResponse({ success: true });
-            });
-        } 
-        else if (request.command === 'stop') {
-            stopTracking();
-            sendResponse({ success: true });
-        } 
-        else if (request.command === 'refresh') {
-            updateReviewCounts();
-            updateAllAgentData();
-            sendResponse({ success: true });
-        }
-        else if (request.command === 'clearLogs') {
-             chrome.storage.local.set({ sessionLogs: [] });
-             sendResponse({ success: true });
-             syncToFirebase();
-        }
-        return true;
-    }
-});
-
 // Listener for Firebase Commands (Android App)
 const commandsRef = ref(db, 'commands');
 onValue(commandsRef, (snapshot) => {
     const cmd = snapshot.val();
     if (!cmd) return;
-
-    console.log("Received Firebase Command:", cmd.action);
 
     if (cmd.action === 'start') {
         chrome.storage.local.set({ selectedAgents: cmd.payload, isRunning: true }, () => {
@@ -163,22 +72,23 @@ onValue(commandsRef, (snapshot) => {
     } else if (cmd.action === 'refresh') {
         updateReviewCounts();
         updateAllAgentData();
+    } else if (cmd.action === 'clearLogs') {
+        chrome.storage.local.set({ sessionLogs: [] }, () => {
+            syncToFirebase();
+        });
     }
 
-    // Clear command so it doesn't run twice
     set(ref(db, 'commands'), null);
 });
 
 
-// Alarm Listener (Cron Jobs)
+// Alarm Listener
 chrome.alarms.onAlarm.addListener((alarm) => {
-    // 1. Queue Refresh (Always runs)
     if (alarm.name === 'reviewCountRefresh') {
         updateReviewCounts();
         return;
     }
 
-    // 2. Agent Tracking (Only if running)
     chrome.storage.local.get('isRunning', (result) => {
         if (!result.isRunning) return;
 
@@ -194,7 +104,6 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 // --- 4. CORE FUNCTIONS ---
 
-// Sync Data to Firebase for Android App
 async function syncToFirebase() {
     const { agentData, reviewCounts, isRunning, sessionLogs } = await chrome.storage.local.get(['agentData', 'reviewCounts', 'isRunning', 'sessionLogs']);
     
@@ -227,18 +136,13 @@ function startTracking() {
         const now = Date.now();
         result.selectedAgents.forEach(name => {
             initialData[name] = { 
-                totalAds: 0, 
-                lastTotal: 0, 
-                thisHourAds: 0, 
-                lastHourAds: 0, 
-                cumulativeNewAds: 0, 
-                permissions: '...',
-                lastActiveTime: now 
+                totalAds: 0, lastTotal: 0, thisHourAds: 0, lastHourAds: 0, 
+                cumulativeNewAds: 0, permissions: '...', lastActiveTime: now, lastLogTime: 0 
             };
         });
 
         chrome.storage.local.set({ agentData: initialData, isRunning: true, sessionLogs: [] }, () => {
-            updateAllAgentData(true); // Initial fetch
+            updateAllAgentData(true);
             
             chrome.alarms.create('adRefresh', { delayInMinutes: 1, periodInMinutes: 15 });
             chrome.alarms.create('inactivityCheck', { delayInMinutes: 5, periodInMinutes: 5 });
@@ -286,37 +190,6 @@ async function updateReviewCounts() {
             await chrome.storage.local.set({ reviewCounts: counts });
             syncToFirebase();
         }
-
-        // Notification Logic
-        const { notificationTimestamps: storedTimestamps } = await chrome.storage.local.get({ notificationTimestamps: {} });
-        const newTimestamps = { ...storedTimestamps };
-        let notificationSent = false;
-
-        const notificationThresholds = { 'member': 25, 'listing_fee': 30, 'general': 300 };
-        const snoozeDurations = { 'member': 900000, 'listing_fee': 900000, 'general': 1800000 };
-
-        const triggeredQueues = [];
-        for (const queue in notificationThresholds) {
-            const count = counts[queue] || 0;
-            if (count >= notificationThresholds[queue] && (Date.now() - (newTimestamps[queue] || 0) > snoozeDurations[queue])) {
-                triggeredQueues.push(queue);
-                newTimestamps[queue] = Date.now();
-                notificationSent = true;
-            }
-        }
-        
-        if (triggeredQueues.length > 0) {
-            chrome.notifications.create({
-                type: 'basic',
-                iconUrl: 'images/icon128.png',
-                title: 'Review Queue Alert',
-                message: `High volume in: ${triggeredQueues.join(', ')}`,
-                priority: 2
-            });
-        }
-        
-        if (notificationSent) await chrome.storage.local.set({ notificationTimestamps: newTimestamps });
-
     } catch (error) {
         console.error("Error fetching review counts:", error);
     } finally {
@@ -348,7 +221,6 @@ async function updateAllAgentData(forceInitial = false) {
             if (totalAds !== null) {
                 const agentStats = newAgentData[name] || {};
                 
-                // Logic: If lastTotal is 0/undefined, it's the baseline (start of tracking)
                 if (forceInitial || !agentStats.lastTotal || agentStats.lastTotal === 0) {
                     agentStats.lastTotal = totalAds;
                     agentStats.thisHourAds = 0;
@@ -378,54 +250,74 @@ async function updateAllAgentData(forceInitial = false) {
 }
 
 async function checkInactivity() {
-    const { agentData, isRunning } = await chrome.storage.local.get(['agentData', 'isRunning']);
+    const { agentData, isRunning, sessionLogs } = await chrome.storage.local.get(['agentData', 'isRunning', 'sessionLogs']);
     if (!isRunning || !agentData) return;
 
-    const MIN_15 = 15 * 60 * 1000;
     const now = Date.now();
-    const inactiveAgents = [];
+    let logsUpdated = false;
+    const currentLogs = sessionLogs || [];
 
     for (const name in agentData) {
         const agent = agentData[name];
         const lastActive = agent.lastActiveTime || now;
         const diff = now - lastActive;
+        const minsInactive = Math.floor(diff / 60000);
         
-        if (diff >= MIN_15) {
-            const minutesInactive = Math.floor(diff / 60000);
-            inactiveAgents.push(`${name} (${minutesInactive}m)`);
+        // Log at 15m, 30m, 60m thresholds (avoid spamming every 5m)
+        // We use lastLogTime to ensure we don't log the same "15m" alert twice
+        if (minsInactive >= 15) {
+            const lastLog = agent.lastLogTime || 0;
+            const timeSinceLastLog = now - lastLog;
+            
+            // Log if we haven't logged for this agent in 14 minutes (approx 15m intervals)
+            if (timeSinceLastLog > 14 * 60 * 1000) {
+                const date = new Date();
+                const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                
+                currentLogs.unshift({
+                    type: 'alert',
+                    time: timeString,
+                    agent: name,
+                    msg: `Inactive for ${minsInactive} minutes`
+                });
+                
+                agent.lastLogTime = now;
+                logsUpdated = true;
+
+                // Send Chrome Notification
+                chrome.notifications.create({
+                    type: 'basic',
+                    iconUrl: 'images/icon128.png',
+                    title: 'Inactivity Alert',
+                    message: `${name} inactive for ${minsInactive} mins!`,
+                    priority: 2
+                });
+            }
         }
     }
 
-    if (inactiveAgents.length > 0) {
-        chrome.notifications.create({
-            type: 'basic',
-            iconUrl: 'images/icon128.png',
-            title: 'Inactivity Alert',
-            message: `Inactive: ${inactiveAgents.join(', ')}`,
-            priority: 2
-        });
+    if (logsUpdated) {
+        // Keep log size manageable (last 50 entries)
+        if (currentLogs.length > 50) currentLogs.length = 50;
+        
+        await chrome.storage.local.set({ agentData, sessionLogs: currentLogs });
+        syncToFirebase();
     }
 }
 
 async function resetHourlyCounts() {
     const { agentData, sessionLogs } = await chrome.storage.local.get(['agentData', 'sessionLogs']);
     if (agentData) {
-        let hourTotal = 0;
-        let grandTotal = 0;
-
-        for (const name in agentData) {
-            hourTotal += (agentData[name].thisHourAds || 0);
-            grandTotal += (agentData[name].cumulativeNewAds || 0);
-        }
-
         const currentLogs = sessionLogs || [];
         const date = new Date();
         const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         
-        currentLogs.push({
+        // Add Hourly Summary Log
+        currentLogs.unshift({
+            type: 'info',
             time: timeString,
-            hourTotal: hourTotal,
-            grandTotal: grandTotal
+            agent: 'SYSTEM',
+            msg: `Hourly Reset Completed`
         });
 
         for (const name in agentData) {
@@ -435,7 +327,6 @@ async function resetHourlyCounts() {
 
         await chrome.storage.local.set({ agentData, sessionLogs: currentLogs });
         syncToFirebase();
-        console.log('Hourly counts reset and logged.');
     }
 }
 
@@ -554,3 +445,4 @@ async function updatePermissionsForAgent(name, newPermissions) {
         throw error;
     }
 }
+
