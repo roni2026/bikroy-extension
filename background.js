@@ -1,4 +1,12 @@
-// Agent object now holds both ad-counter ID and the permission search URL
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js';
+import { getDatabase, ref, set, update, onValue } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js';
+import firebaseConfig from './firebase-config.js';
+
+// --- 1. FIREBASE INITIALIZATION ---
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+// --- 2. AGENTS CONFIGURATION ---
 const agents = {
     "Mehedi": {
         id: "5300426f-74f8-45fb-8a13-2cf5b3a90e35",
@@ -50,7 +58,7 @@ const agents = {
     },
     "Roni": {
         id: "7585f878-a596-43ed-a7e8-ab49ee257e22",
-        permission_url: null // No link was provided for Roni
+        permission_url: null 
     },
     "Deb": {
         id: "4c658d2c-efb2-46b5-a4b6-0842df96ca58",
@@ -62,13 +70,16 @@ const agents = {
     }
 };
 
+// --- 3. EVENT LISTENERS ---
+
+// On Install/Update
 chrome.runtime.onInstalled.addListener(() => {
     console.log("Extension installed/updated.");
     chrome.storage.local.set({ notificationTimestamps: {}, sessionLogs: [] });
     chrome.alarms.create('reviewCountRefresh', { delayInMinutes: 1, periodInMinutes: 1 });
 });
 
-// Listener for Internal Popup Messages
+// Listener for Internal Popup Messages (Extension Popup)
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'startTracking') {
         startTracking();
@@ -92,15 +103,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     } else if (request.action === 'updatePermissions') {
         updatePermissionsForAgent(request.agentName, request.permissions)
             .then(() => sendResponse({ status: 'success' }))
-            .catch(error => sendResponse({ status: 'error', error: message }));
+            .catch(error => sendResponse({ status: 'error', error: 'Update failed' }));
     }
     return true; 
 });
 
-// Listener for External Web Dashboard Messages
+// Listener for External Messages (Local Web Dashboard)
 chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
     if (request.action === 'handshake') {
-        sendResponse({ status: 'connected', version: '1.2' });
+        sendResponse({ status: 'connected', version: '1.3' });
         return true; 
     }
     if (request.action === 'getData') {
@@ -129,17 +140,45 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
         else if (request.command === 'clearLogs') {
              chrome.storage.local.set({ sessionLogs: [] });
              sendResponse({ success: true });
+             syncToFirebase();
         }
         return true;
     }
 });
 
+// Listener for Firebase Commands (Android App)
+const commandsRef = ref(db, 'commands');
+onValue(commandsRef, (snapshot) => {
+    const cmd = snapshot.val();
+    if (!cmd) return;
+
+    console.log("Received Firebase Command:", cmd.action);
+
+    if (cmd.action === 'start') {
+        chrome.storage.local.set({ selectedAgents: cmd.payload, isRunning: true }, () => {
+            startTracking();
+        });
+    } else if (cmd.action === 'stop') {
+        stopTracking();
+    } else if (cmd.action === 'refresh') {
+        updateReviewCounts();
+        updateAllAgentData();
+    }
+
+    // Clear command so it doesn't run twice
+    set(ref(db, 'commands'), null);
+});
+
+
+// Alarm Listener (Cron Jobs)
 chrome.alarms.onAlarm.addListener((alarm) => {
+    // 1. Queue Refresh (Always runs)
     if (alarm.name === 'reviewCountRefresh') {
         updateReviewCounts();
         return;
     }
 
+    // 2. Agent Tracking (Only if running)
     chrome.storage.local.get('isRunning', (result) => {
         if (!result.isRunning) return;
 
@@ -153,11 +192,28 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     });
 });
 
+// --- 4. CORE FUNCTIONS ---
+
+// Sync Data to Firebase for Android App
+async function syncToFirebase() {
+    const { agentData, reviewCounts, isRunning, sessionLogs } = await chrome.storage.local.get(['agentData', 'reviewCounts', 'isRunning', 'sessionLogs']);
+    
+    update(ref(db, 'status'), {
+        lastUpdated: Date.now(),
+        isRunning: isRunning || false,
+        agentData: agentData || {},
+        reviewCounts: reviewCounts || {},
+        sessionLogs: sessionLogs || []
+    });
+}
+
 function stopTracking() {
     chrome.alarms.clear('adRefresh');
     chrome.alarms.clear('hourlyReset');
     chrome.alarms.clear('inactivityCheck');
-    chrome.storage.local.set({ isRunning: false, agentData: {} }); // Logs are preserved until manually cleared
+    chrome.storage.local.set({ isRunning: false, agentData: {} }, () => {
+        syncToFirebase();
+    });
 }
 
 function startTracking() {
@@ -182,14 +238,16 @@ function startTracking() {
         });
 
         chrome.storage.local.set({ agentData: initialData, isRunning: true, sessionLogs: [] }, () => {
-            updateAllAgentData(true);
+            updateAllAgentData(true); // Initial fetch
             
             chrome.alarms.create('adRefresh', { delayInMinutes: 1, periodInMinutes: 15 });
-            chrome.alarms.create('inactivityCheck', { delayInMinutes: 5, periodInMinutes: 5 }); // Check every 5 mins
+            chrome.alarms.create('inactivityCheck', { delayInMinutes: 5, periodInMinutes: 5 });
             
             const nowTime = new Date();
             const minutesToNextHour = 60 - nowTime.getMinutes();
             chrome.alarms.create('hourlyReset', { delayInMinutes: minutesToNextHour, periodInMinutes: 60 });
+            
+            syncToFirebase();
         });
     });
 }
@@ -224,9 +282,12 @@ async function updateReviewCounts() {
         });
 
         const counts = injectionResults[0].result;
-        if (counts) await chrome.storage.local.set({ reviewCounts: counts });
+        if (counts) {
+            await chrome.storage.local.set({ reviewCounts: counts });
+            syncToFirebase();
+        }
 
-        // Notification Logic for High Queues
+        // Notification Logic
         const { notificationTimestamps: storedTimestamps } = await chrome.storage.local.get({ notificationTimestamps: {} });
         const newTimestamps = { ...storedTimestamps };
         let notificationSent = false;
@@ -287,11 +348,11 @@ async function updateAllAgentData(forceInitial = false) {
             if (totalAds !== null) {
                 const agentStats = newAgentData[name] || {};
                 
+                // Logic: If lastTotal is 0/undefined, it's the baseline (start of tracking)
                 if (forceInitial || !agentStats.lastTotal || agentStats.lastTotal === 0) {
-                    // Baseline set
                     agentStats.lastTotal = totalAds;
                     agentStats.thisHourAds = 0;
-                    agentStats.cumulativeNewAds = 0; // "Total Tracked" starts at 0
+                    agentStats.cumulativeNewAds = 0; 
                     agentStats.lastActiveTime = currentTime;
                 } else {
                     if (totalAds > agentStats.lastTotal) {
@@ -313,9 +374,9 @@ async function updateAllAgentData(forceInitial = false) {
     }
     
     await chrome.storage.local.set({ agentData: newAgentData });
+    syncToFirebase();
 }
 
-// --- Check Inactivity Function (Updated for 15, 20, 25... mins) ---
 async function checkInactivity() {
     const { agentData, isRunning } = await chrome.storage.local.get(['agentData', 'isRunning']);
     if (!isRunning || !agentData) return;
@@ -329,8 +390,6 @@ async function checkInactivity() {
         const lastActive = agent.lastActiveTime || now;
         const diff = now - lastActive;
         
-        // Triggers if diff is >= 15 mins. Since alarm runs every 5 mins, 
-        // this will trigger at ~15, ~20, ~25, etc.
         if (diff >= MIN_15) {
             const minutesInactive = Math.floor(diff / 60000);
             inactiveAgents.push(`${name} (${minutesInactive}m)`);
@@ -354,13 +413,11 @@ async function resetHourlyCounts() {
         let hourTotal = 0;
         let grandTotal = 0;
 
-        // Calculate totals for the log before resetting
         for (const name in agentData) {
             hourTotal += (agentData[name].thisHourAds || 0);
             grandTotal += (agentData[name].cumulativeNewAds || 0);
         }
 
-        // Add to Log
         const currentLogs = sessionLogs || [];
         const date = new Date();
         const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -371,18 +428,19 @@ async function resetHourlyCounts() {
             grandTotal: grandTotal
         });
 
-        // Reset Counts
         for (const name in agentData) {
             agentData[name].lastHourAds = agentData[name].thisHourAds || 0;
             agentData[name].thisHourAds = 0;
         }
 
-        chrome.storage.local.set({ agentData, sessionLogs: currentLogs });
+        await chrome.storage.local.set({ agentData, sessionLogs: currentLogs });
+        syncToFirebase();
         console.log('Hourly counts reset and logged.');
     }
 }
 
-// ... Permission functions ...
+// --- 5. PERMISSION UTILS ---
+
 async function fetchPermissionsForAgent(name, rawOutput = false) {
     const agentInfo = agents[name];
     if (!agentInfo.permission_url) return rawOutput ? [] : 'N/A';
@@ -489,6 +547,7 @@ async function updatePermissionsForAgent(name, newPermissions) {
         if (agentData?.[name]) {
             agentData[name].permissions = await fetchPermissionsForAgent(name);
             await chrome.storage.local.set({ agentData });
+            syncToFirebase();
         }
     } catch (error) {
         if (searchTab) await chrome.tabs.remove(searchTab.id).catch(e => console.error(e));
