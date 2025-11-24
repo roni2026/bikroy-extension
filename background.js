@@ -157,6 +157,9 @@ chrome.alarms.onAlarm.addListener((alarm) => {
         } else if (alarm.name === 'hourlyReset') {
             console.log('ALARM: Hourly count reset triggered.');
             resetHourlyCounts();
+        } else if (alarm.name === 'inactivityCheck') {
+             console.log('ALARM: Inactivity Check.');
+             checkInactivity();
         }
     });
 });
@@ -166,6 +169,7 @@ function stopTracking() {
     // Clear only agent-related alarms
     chrome.alarms.clear('adRefresh');
     chrome.alarms.clear('hourlyReset');
+    chrome.alarms.clear('inactivityCheck');
     // Set agent data to empty and tracking to false
     chrome.storage.local.set({ isRunning: false, agentData: {} });
     console.log('Agent tracking stopped. Agent data and alarms cleared.');
@@ -180,8 +184,17 @@ function startTracking() {
         }
         
         const initialData = {};
+        const now = Date.now();
         result.selectedAgents.forEach(name => {
-            initialData[name] = { totalAds: 0, lastTotal: 0, thisHourAds: 0, lastHourAds: 0, cumulativeNewAds: 0, permissions: '...' };
+            initialData[name] = { 
+                totalAds: 0, 
+                lastTotal: 0, 
+                thisHourAds: 0, 
+                lastHourAds: 0, 
+                cumulativeNewAds: 0, 
+                permissions: '...',
+                lastActiveTime: now // Initialize last active time to NOW
+            };
         });
 
         chrome.storage.local.set({ agentData: initialData, isRunning: true }, () => {
@@ -189,8 +202,9 @@ function startTracking() {
             
             // --- Set up agent-specific alarms ---
             chrome.alarms.create('adRefresh', { delayInMinutes: 1, periodInMinutes: 15 });
-            const now = new Date();
-            const minutesToNextHour = 60 - now.getMinutes();
+            chrome.alarms.create('inactivityCheck', { delayInMinutes: 15, periodInMinutes: 15 }); // Check every 15 mins
+            const nowTime = new Date();
+            const minutesToNextHour = 60 - nowTime.getMinutes();
             chrome.alarms.create('hourlyReset', { delayInMinutes: minutesToNextHour, periodInMinutes: 60 });
         });
     });
@@ -200,6 +214,8 @@ function resetStats() {
     console.log('Resetting agent statistics...');
     // Clear and then restart agent tracking
     chrome.alarms.clear('adRefresh');
+    chrome.alarms.clear('hourlyReset');
+    chrome.alarms.clear('inactivityCheck');
     chrome.alarms.clear('hourlyReset', () => {
         startTracking();
     });
@@ -234,7 +250,7 @@ async function updateReviewCounts() {
         await chrome.storage.local.set({ reviewCounts: counts });
         console.log("Review counts updated:", counts);
 
-        // --- NEW Notification Logic with Snooze ---
+        // --- Notification Logic for High Queues ---
         const { notificationTimestamps: storedTimestamps } = await chrome.storage.local.get({ notificationTimestamps: {} });
         const newTimestamps = { ...storedTimestamps };
         let notificationSent = false;
@@ -288,7 +304,7 @@ async function updateReviewCounts() {
 }
 
 
-async function updateAllAgentData(isInitial = false) {
+async function updateAllAgentData(forceInitial = false) {
     const { selectedAgents, agentData: currentData } = await chrome.storage.local.get(['selectedAgents', 'agentData']);
 
     if (!selectedAgents || selectedAgents.length === 0) {
@@ -297,6 +313,7 @@ async function updateAllAgentData(isInitial = false) {
     }
 
     const newAgentData = JSON.parse(JSON.stringify(currentData || {}));
+    const currentTime = Date.now();
 
     for (const name of selectedAgents) {
         if (!agents[name]) continue;
@@ -314,17 +331,25 @@ async function updateAllAgentData(isInitial = false) {
 
             if (totalAds !== null) {
                 const agentStats = newAgentData[name] || {};
-                if (isInitial) {
+                
+                // FIX: If lastTotal is 0 or missing, treat this as the INITIAL baseline.
+                // This prevents the "This Hour" count from jumping to 160,000 immediately.
+                if (forceInitial || !agentStats.lastTotal || agentStats.lastTotal === 0) {
                     agentStats.lastTotal = totalAds;
+                    agentStats.thisHourAds = 0; // Reset counters on initial
+                    agentStats.cumulativeNewAds = 0;
+                    agentStats.lastActiveTime = currentTime; // Reset activity timer
                 } else {
-                    if (totalAds > (agentStats.lastTotal || 0)) {
+                    if (totalAds > agentStats.lastTotal) {
                         const newAds = totalAds - agentStats.lastTotal;
                         agentStats.thisHourAds = (agentStats.thisHourAds || 0) + newAds;
                         agentStats.cumulativeNewAds = (agentStats.cumulativeNewAds || 0) + newAds;
+                        agentStats.lastActiveTime = currentTime; // Update activity timestamp
                     }
                 }
-                agentStats.totalAds = totalAds;
-                agentStats.lastTotal = totalAds;
+                
+                agentStats.totalAds = totalAds; // Keep track of raw total for debug
+                agentStats.lastTotal = totalAds; // Update baseline for next compare
                 newAgentData[name] = agentStats;
             }
         } catch (error) {
@@ -338,6 +363,36 @@ async function updateAllAgentData(isInitial = false) {
     }
     
     await chrome.storage.local.set({ agentData: newAgentData });
+}
+
+// --- Check Inactivity Function ---
+async function checkInactivity() {
+    const { agentData, isRunning } = await chrome.storage.local.get(['agentData', 'isRunning']);
+    if (!isRunning || !agentData) return;
+
+    const INACTIVITY_LIMIT = 15 * 60 * 1000; // 15 Minutes in MS
+    const now = Date.now();
+    const inactiveAgents = [];
+
+    for (const name in agentData) {
+        const agent = agentData[name];
+        // If lastActiveTime is missing, default to now (to be safe)
+        const lastActive = agent.lastActiveTime || now;
+        
+        if (now - lastActive > INACTIVITY_LIMIT) {
+            inactiveAgents.push(name);
+        }
+    }
+
+    if (inactiveAgents.length > 0) {
+        chrome.notifications.create({
+            type: 'basic',
+            iconUrl: 'images/icon128.png',
+            title: 'Agent Inactivity Alert',
+            message: `${inactiveAgents.join(', ')} inactive for over 15 mins!`,
+            priority: 2
+        });
+    }
 }
 
 function getPermissionsFromPage() {
